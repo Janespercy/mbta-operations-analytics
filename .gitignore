@@ -1,0 +1,9 @@
+data/
+*.parquet
+profile_output.txt
+.venv/
+__pycache__/
+.idea/
+spark-warehouse/
+metastore_db/
+derby.log
