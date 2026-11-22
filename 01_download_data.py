@@ -1,57 +1,68 @@
-"""
-Step 1: Download real MBTA LAMP data.
+"""Download MBTA LAMP subway performance files and static route/stop tables.
 
-Fact source:  subway-on-time-performance-v1 (one Parquet file per service date)
-Dimensions:   LAMP static routes + stops (Parquet)
-Source docs:  https://performancedata.mbta.com/
-
-Usage:  python 01_download_data.py [N_DAYS]   (default 7 most recent service dates)
+Data source: https://performancedata.mbta.com/
 """
+import argparse
 import re
-import sys
 import urllib.error
 import urllib.request
+from datetime import date
 from pathlib import Path
 
-BASE = "https://performancedata.mbta.com/lamp"
-OTP_DIR = f"{BASE}/subway-on-time-performance-v1"
-STATIC_FILES = ["LAMP_static_routes.parquet", "LAMP_static_stops.parquet"]
-N_DAYS = int(sys.argv[1]) if len(sys.argv) > 1 else 7
-
-RAW = Path("data/raw")
-(RAW / "otp").mkdir(parents=True, exist_ok=True)
-(RAW / "static").mkdir(parents=True, exist_ok=True)
+LAMP_URL = "https://performancedata.mbta.com/lamp"
+OTP_URL = f"{LAMP_URL}/subway-on-time-performance-v1"
+STATIC_TABLES = ["LAMP_static_routes.parquet", "LAMP_static_stops.parquet"]
 
 
-def fetch(url: str, dest: Path) -> bool:
+def download(url, dest):
     if dest.exists():
-        print(f"  skip (exists) {dest}")
+        print(f"already have {dest.name}")
         return True
     try:
         urllib.request.urlretrieve(url, dest)
-        print(f"  ok   {dest}  ({dest.stat().st_size / 1e6:.1f} MB)")
-        return True
-    except urllib.error.HTTPError as e:
-        print(f"  miss {url}  (HTTP {e.code})")
+    except urllib.error.HTTPError as err:
+        print(f"failed {url} ({err.code})")
         return False
+    print(f"saved {dest} ({dest.stat().st_size / 1e6:.1f} MB)")
+    return True
 
 
-# 1. Index of all published service dates
-index_text = urllib.request.urlopen(f"{OTP_DIR}/index.csv").read().decode()
-(RAW / "otp_index.csv").write_text(index_text)
-dates = sorted(set(re.findall(r"\d{4}-\d{2}-\d{2}", index_text)), reverse=True)
-print(f"index.csv lists {len(dates)} distinct dates ({dates[-1]} -> {dates[0]})")
+def main(n_days, out_dir):
+    otp_dir = out_dir / "otp"
+    static_dir = out_dir / "static"
+    otp_dir.mkdir(parents=True, exist_ok=True)
+    static_dir.mkdir(parents=True, exist_ok=True)
 
-# 2. Most recent N service dates that actually download
-got = []
-for d in dates:
-    if len(got) == N_DAYS:
-        break
-    url = f"{OTP_DIR}/{d}-subway-on-time-performance-v1.parquet"
-    if fetch(url, RAW / "otp" / f"{d}.parquet"):
-        got.append(d)
-print(f"\nDownloaded {len(got)} service days: {sorted(got)}")
+    index = urllib.request.urlopen(f"{OTP_URL}/index.csv").read().decode()
+    (out_dir / "otp_index.csv").write_text(index)
 
-# 3. Static dimension tables
-for f in STATIC_FILES:
-    fetch(f"{BASE}/tableau/rail/{f}", RAW / "static" / f)
+    # grab dates from the raw text so this doesn't depend on the index's column names
+    dates = sorted(set(re.findall(r"\d{4}-\d{2}-\d{2}", index)), reverse=True)
+    # today's file is a partial service day, so only take completed days
+    dates = [d for d in dates if d < date.today().isoformat()]
+    print(f"{len(dates)} dates in index, latest is {dates[0]}")
+
+    downloaded = []
+    for d in dates:
+        if len(downloaded) == n_days:
+            break
+        # skip any date whose file isn't there and keep going back
+        url = f"{OTP_URL}/{d}-subway-on-time-performance-v1.parquet"
+        if download(url, otp_dir / f"{d}.parquet"):
+            downloaded.append(d)
+
+    if downloaded:
+        print(f"got {len(downloaded)} days: {min(downloaded)} to {max(downloaded)}")
+    else:
+        print("no daily files downloaded, check the URLs")
+
+    for table in STATIC_TABLES:
+        download(f"{LAMP_URL}/tableau/rail/{table}", static_dir / table)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--days", type=int, default=7)
+    parser.add_argument("--out", type=Path, default=Path("data/raw"))
+    args = parser.parse_args()
+    main(args.days, args.out)
