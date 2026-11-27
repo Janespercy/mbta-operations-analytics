@@ -1,0 +1,4 @@
+pandas==2.3.3
+py4j==0.10.9.9
+pyarrow==26.0.1
+pyspark==4.3.0
