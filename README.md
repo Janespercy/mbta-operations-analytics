@@ -22,6 +22,7 @@ Raw data isn't committed to this repo. `01_download_data.py` pulls it fresh. Use
 04_run_queries.py      run everything in sql/ and save results as CSV
 05_etl_pandas.py       same ETL in pandas
 06_compare_etl.py      run both ETLs, time them, and check outputs match
+07_make_charts.py      turn the query results into the charts in docs/images/
 ```
 
 Profiling came first so the schema was designed around the real columns rather than guessed ones.
@@ -107,15 +108,23 @@ Many nulls in the raw data are structural, not missing: lines without branches h
 
 **Schedule comparisons break down for unscheduled trips.** Trips with an `ADDED-` ID aren't in the published schedule. They make up 16% of events but **92.5% of the schedule mismatches** — a 48.9% mismatch rate, versus 0.76% for scheduled trips. Because of this, headway adherence is used as the main reliability metric instead of schedule delay.
 
+![Schedule mismatch rates for ADDED vs scheduled trips by route](docs/images/schedule_mismatch.png)
+
 **Headways reproduce independently.** Recomputing trunk headways from arrival timestamps with `LAG` matches LAMP's own `headway_trunk_seconds` within 2 minutes for **91.8% of 260,127 headways** (median difference: 8 seconds). The small offset suggests LAMP measures headways on a slightly different timestamp.
 
 ## Analysis
 
 The queries in `sql/` use window functions (`LAG`, `DENSE_RANK`, rolling `AVG OVER`), CTEs and multi-table joins. Some results:
 
-- **Headway adherence** (share of headways at most 1.5x scheduled): Orange Line 91–94% across time periods, Red Line 78–81%, Green Line C as low as 70% midday, Mattapan 90–98%.
+![Headway adherence heatmap by route and time of day](docs/images/headway_adherence.png)
+
+- **Headway adherence** (share of headways at most 1.5x scheduled): Orange Line 91–94% across time periods and Mattapan 90–98%, while Green Line D is the weakest in every period at 69–76%. Blue ranges 81–90%, Red 78–81%.
 - **Longest dwell times:** Park Street ranks in the top 3 on the Red Line and Green Line B, C, D and E branches. Warren Street on the B branch has the longest median dwell of any station (79 s).
 - **Weekday vs weekend:** average segment travel and dwell times differ by less than 7 seconds on every route.
+
+![Longest median dwell times by station and route](docs/images/top_dwell.png)
+
+![Average stop events by hour of day](docs/images/hourly_profile.png)
 
 ## Spark vs pandas
 
@@ -148,12 +157,13 @@ python 02_profile_data.py > profile_output.txt
 python 03_etl_spark.py
 python 04_run_queries.py
 python 06_compare_etl.py              # also runs 05_etl_pandas.py
+python 07_make_charts.py
 ```
 
-Outputs go to `data/warehouse/` (Spark), `data/warehouse_pandas/` (pandas) and `data/results/` (query CSVs).
+Outputs go to `data/warehouse/` (Spark), `data/warehouse_pandas/` (pandas), `data/results/` (query CSVs) and `docs/images/` (charts, committed so they show here).
 
 ## Next steps
 
 - Run the comparison on 30 and 90 days to find where Spark overtakes pandas
-- Add a dashboard on top of the results tables
+- Add an interactive dashboard on top of the results tables
 - Track headway adherence over multiple weeks
