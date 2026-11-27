@@ -117,7 +117,9 @@ def apply_hard_rules(events, dim_route, dim_stop):
     reason = (
         F.when(F.col("trip_id").isNull() | F.col("stop_id").isNull() | F.col("route_id").isNull(), "missing_key")
         .when(F.col("stop_timestamp").isNull() & F.col("move_timestamp").isNull(), "missing_timestamps")
-        .when(F.col("_dup_rank") > 1, "duplicate_event")
+        # same (service_date, trip_id, stop_sequence) seen more than once; mostly NOT exact copies
+        # (different arrival times / stops), so these are key conflicts, not true duplicates
+        .when(F.col("_dup_rank") > 1, "conflicting_event_key")
         .when(F.col("_known_route").isNull(), "unknown_route")
         .when(F.col("_known_stop").isNull(), "unknown_stop")
     )
