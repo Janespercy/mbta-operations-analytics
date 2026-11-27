@@ -110,6 +110,8 @@ Many nulls in the raw data are structural, not missing: lines without branches h
 
 ![Schedule mismatch rates for ADDED vs scheduled trips by route](docs/images/schedule_mismatch.png)
 
+**Headway adherence holds up with or without ADDED trips.** Excluding them changes adherence by at most 0.6 percentage points on any route, and Green Line D remains the lowest (73.6%). Most ADDED events lack a headway or scheduled headway value and drop out of the metric, so unlike schedule delay, headways aren't distorted by them.
+
 **Headways reproduce independently.** Recomputing trunk headways from arrival timestamps with `LAG` matches LAMP's own `headway_trunk_seconds` within 2 minutes for **91.8% of 260,127 headways** (median difference: 8 seconds). The small offset suggests LAMP measures headways on a slightly different timestamp.
 
 ## Analysis
